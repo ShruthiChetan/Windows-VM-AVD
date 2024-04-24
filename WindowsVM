@@ -1,0 +1,123 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "Customer_ID": {
+            "type": "string"
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "westus"
+        },
+        "tags": {
+            "type": "string"
+        },
+        "AdminUserName": {
+            "type": "string",
+            "defaultValue": "adama"
+        },
+        "AdminUserPassword": {
+            "type": "securestring"
+        },
+        "VirtualNetwork": {
+            "allowedValues": [
+                "avd-vnet",
+                "avd-actual-vnet",
+                "ansible-controller-vnet",
+                "test01"
+            ],
+            "type": "string"
+        },
+        "SubnetName": {
+            "type": "string"
+        },
+        "SubnetAddressPrefix": {
+            "type": "string",
+            "metadata": {
+                "description": "Address prefix for the new subnet."
+            }
+        }
+    },
+    "variables": {
+        "HostPoolName": "[concat(parameters('Customer_ID'),'-HostPool')]",
+        "NetworkInterfaceCard": "[concat(parameters('Customer_ID'),'-nic')]",
+        "VMName": "[concat(parameters('Customer_ID'),'-TS')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Network/virtualNetworks/subnets",
+            "apiVersion": "2021-02-01",
+            "name": "[concat(parameters('VirtualNetwork'), '/', parameters('SubnetName'))]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "addressPrefix": "[concat(parameters('subnetAddressPrefix'),'/28')]"
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2022-09-01",
+            "name": "[variables('NetworkInterfaceCard')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "[concat(parameters('Customer_ID'),'-ipconfig')]",
+                        "properties": {
+                            "subnet": {
+                                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('VirtualNetwork'), parameters('SubnetName'))]"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines",
+            "apiVersion": "2021-07-01",
+            "name": "[variables('VMName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('VirtualNetwork'), parameters('SubnetName'))]",
+                "[resourceId('Microsoft.Network/networkInterfaces', variables('NetworkInterfaceCard'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "Standard_D2ds_v5"
+                },
+                "osProfile": {
+                    "computerName": "[concat(parameters('Customer_ID'),'-TS')]",
+                    "adminUsername": "[parameters('AdminUserName')]",
+                    "adminPassword": "[parameters('AdminUserPassword')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "MicrosoftWindowsDesktop",
+                        "offer": "Windows-11",
+                        "sku": "win11-22h2-avd",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "osType": "Windows",
+                        "createOption": "FromImage",
+                        "caching": "ReadWrite",
+                        "managedDisk": {
+                            "storageAccountType": "Premium_LRS"
+                        }
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('NetworkInterfaceCard'))]"
+                        }
+                    ]
+                },
+                "licenseType": "Windows_Client"
+            }
+        }
+    ]
+}
